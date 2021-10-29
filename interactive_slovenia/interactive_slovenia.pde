@@ -1,10 +1,15 @@
-PShape sloveniaShape; //<>// //<>// //<>//
-float shapeWidth = 1200;
+PShape sloveniaShape; //<>// //<>// //<>// //<>//
+float shapeWidth = 4000;
 float shapeHeight = shapeWidth*210/297;
+
+String NASLOV = "Vpliv višine povprečne plače na dnevne migracije (po regijah 2020)";
 
 int povprecnaPlaca = 1252;
 int maxPovprecnaPlaca = 0;
 int minPovprecnaPlaca = 1999900;
+
+int currentlyDrawing = -1;
+float interpolator = 0;
 
 String[] regije = {"pomurska", "podravska", "koroška", "savinjska", "zasavska", "posavska",
   "jugovzhodna-slovenija", "osrednjeslovenska", "gorenjska", "primorsko-notranjska", "goriška", "obalno-kraška"};
@@ -12,10 +17,11 @@ String[] regije = {"pomurska", "podravska", "koroška", "savinjska", "zasavska",
 String[] imenaRegij = {"Pomurska", "Podravska", "Koroška", "Savinjska", "Zasavska", "Posavska",
   "Jugovzhodna Slovenija", "Osrednjeslovenska", "Gorenjska", "Primorsko-notranjska", "Goriška", "Obalno-kraška"};
 
-int[] barveRegij = {-3670016, -3342336, -3014656, -2686976, -2359296, 1575026688,
-  -1703936, -1048576, -589824, -1376256, -65536, -393216};
+int[] barveRegij = {-5591836, -6640445, -4608134, -8499590, -2279963, -4835099,
+  -1069851, -5878194, -4388352, -5898240, -4388240, -4337296};
 
-int[][] lokacijeRegij = {{1025, 135}, {863, 233}, {639, 197}, {707, 341}, {591, 432}, {768, 506}, {613, 641}, {442, 468}, {295, 326}, {348, 645}, {171, 457}, {225, 670}};
+int[][] lokacijeRegij = {{978, 152}, {828, 249}, {610, 210}, {663, 355}, {563, 429}, {741, 508},
+  {581, 631}, {417, 473}, {288, 337}, {332, 636}, {163, 458}, {219, 672}};
 
 Regija[] regions = new Regija[12];
 
@@ -29,13 +35,20 @@ class Regija {
   String id;
   int povprecnaPlaca;
   HashMap<String, Integer> delavciPoRegijah;
-  int delavciSkupaj;
+  int delavciSkupaj = 0;
+  int delavciIzvenRegije = 0;
 
-  Regija(String id, int povprecnaPlaca, HashMap<String, Integer> delavciPoRegijah, int delavciSkupaj) {
+  Regija(String id, int povprecnaPlaca, HashMap<String, Integer> delavciPoRegijah) {
     this.id = id;
     this.povprecnaPlaca = povprecnaPlaca;
     this.delavciPoRegijah = delavciPoRegijah;
-    this.delavciSkupaj = delavciSkupaj;
+
+    for (var entry : delavciPoRegijah.entrySet()) {
+      this.delavciSkupaj += entry.getValue();
+      if (!entry.getKey().equals(this.id)) {
+        this.delavciIzvenRegije += entry.getValue();
+      }
+    }
   }
 }
 
@@ -50,7 +63,7 @@ void loadOffscreenBuffer() {
   }
 
   for (PShape regija : regionShapes) {
-    areaChecker.shape(regija, 0, 0, shapeWidth*3.5, shapeHeight*3.5);
+    areaChecker.shape(regija, 0, 0, shapeWidth, shapeHeight);
   }
 
   areaChecker.endDraw();
@@ -60,6 +73,11 @@ void loadPodatki() {
   tabelaRegij = new Table("clean-podatki.tsv");
   for (int row=0; row < tabelaRegij.getRowCount(); row++) {
     String id = tabelaRegij.getRowName(row);
+    id = imenaRegij[row]; // ne prebere pravilno sumnikov iz tabele :&
+
+
+
+    print(id + "\n");
     int povprecnaPlaca = tabelaRegij.getInt(row, 1);
 
     if (povprecnaPlaca < minPovprecnaPlaca) {
@@ -89,7 +107,7 @@ void loadPodatki() {
     delavciPoRegijah.put("Koroška", koroska);
     delavciPoRegijah.put("Savinjska", savinjska);
     delavciPoRegijah.put("Zasavska", zasavska);
-    delavciPoRegijah.put("Posavska", pomurska);
+    delavciPoRegijah.put("Posavska", posavska);
     delavciPoRegijah.put("Jugovzhodna Slovenija", jugovzhodna);
     delavciPoRegijah.put("Osrednjeslovenska", osrednjeslovenska);
     delavciPoRegijah.put("Gorenjska", gorenjska);
@@ -97,48 +115,91 @@ void loadPodatki() {
     delavciPoRegijah.put("Goriška", goriska);
     delavciPoRegijah.put("Obalno-kraška", obalnoKraska);
 
-    int vsota = pomurska+podravska+koroska+savinjska+zasavska+posavska+jugovzhodna+osrednjeslovenska+gorenjska+primorskoNotranjska+goriska+obalnoKraska;
-
-    regions[row] = new Regija(id, povprecnaPlaca, delavciPoRegijah, vsota);
+    regions[row] = new Regija(id, povprecnaPlaca, delavciPoRegijah);
   }
 }
 
 
 void drawArrowsForSelectedRegion(int selectedRegion) {
-  int vsiDelavci = 0;
-  for (int i : regions[selectedRegion].delavciPoRegijah.values()) {
-    vsiDelavci +=i;
+
+  if (currentlyDrawing != selectedRegion) {
+    interpolator = 0;
+    currentlyDrawing = selectedRegion;
+  } else {
+    interpolator = min(interpolator+0.1, 1);
   }
   for (int i = 0; i < 12; i++) {
     if (i != selectedRegion) {
       int delavciVRegiji =  regions[selectedRegion].delavciPoRegijah.get(imenaRegij[i]);
-      float procentDelavcev = delavciVRegiji*100/vsiDelavci;
+      float procentDelavcev = ((float) delavciVRegiji)*100/regions[selectedRegion].delavciSkupaj;
       strokeWeight(procentDelavcev);
-      line(lokacijeRegij[selectedRegion][0], lokacijeRegij[selectedRegion][1], lokacijeRegij[i][0], lokacijeRegij[i][1]);
+      line(lokacijeRegij[selectedRegion][0], lokacijeRegij[selectedRegion][1], (1-sqrt(interpolator))*lokacijeRegij[selectedRegion][0] +  sqrt(interpolator)*lokacijeRegij[i][0], (1-sqrt(interpolator))*lokacijeRegij[selectedRegion][1] +  sqrt(interpolator)*lokacijeRegij[i][1]);
+      float k = (lokacijeRegij[selectedRegion][0] -   lokacijeRegij[i][0])/ (lokacijeRegij[i][1] - lokacijeRegij[selectedRegion][1]);
+
+      //pushMatrix();
+      //translate(lokacijeRegij[i][0], lokacijeRegij[i][1]);
+      //if(lokacijeRegij[selectedRegion][0] -   lokacijeRegij[i][0]>0){
+      //rotate(atan(k)+PI);
+
+      //}else{
+      //rotate(atan(k));
+
+      //}
+      //triangle(-30, 30, 0, -30, 30, 30);
+      //popMatrix();
+
+
       strokeWeight(1);
     }
   }
 }
 
 void displayInfoAboutSelectedRegion(int selectedRegion) {
-  /**
-   TODO, create rectangle withj extra information on lower right.!
-  **/
-  int vsiDelavci = 0;
-  for (int i : regions[selectedRegion].delavciPoRegijah.values()) {
-    vsiDelavci +=i;
-  }
-  
-  
-  for (int i = 0; i < 12; i++) {
-    if (i != selectedRegion) {
-      int delavciVRegiji =  regions[selectedRegion].delavciPoRegijah.get(imenaRegij[i]);
-      float procentDelavcev = delavciVRegiji*100/vsiDelavci;
-      strokeWeight(procentDelavcev);
-      line(lokacijeRegij[selectedRegion][0], lokacijeRegij[selectedRegion][1], lokacijeRegij[i][0], lokacijeRegij[i][1]);
-      strokeWeight(1);
+
+  stroke(0, 0, 0, 255*sqrt(interpolator));
+
+  fill(0, 0, 100, 255*sqrt(interpolator));
+  rect(880, 420, 570, 350);
+  textSize(50);
+  String imeRegije = regije[selectedRegion];
+  imeRegije = imeRegije.substring(0, 1).toUpperCase() + imeRegije.substring(1);
+  //text(imeRegije, mouseX+5, mouseY-150+30);
+  fill(0, 0, 0, 255*sqrt(interpolator));
+
+  textAlign(CENTER);
+  text(imeRegije, 880+570/2, 435+50);
+
+
+  Regija regija = regions[selectedRegion];
+
+  var sortedRegije = new ArrayList<String>();
+
+  for (var entry : regija.delavciPoRegijah.entrySet()) {
+    var added = false;
+    for (int i = 0; i < sortedRegije.size(); i++) {
+      String ime = sortedRegije.get(i);
+      if (regija.delavciPoRegijah.get(ime) < entry.getValue()) {
+        sortedRegije.add(i, entry.getKey());
+        added = true;
+        break;
+      }
+    }
+    if (!added) {
+      sortedRegije.add(entry.getKey());
     }
   }
+
+  textSize(30);
+  for (int i=1; i< 6; i++) {
+    String targetRegion = sortedRegije.get(i);
+    float procentMigrantov = ((float) round((float) regija.delavciPoRegijah.get(targetRegion)/regija.delavciSkupaj * 1000))/10;
+    textAlign(LEFT);
+    text(targetRegion, 902+5, 435+50 + i*50);
+    text("  " + procentMigrantov +  "%", 902+5+320, 435+50 + i*50);
+    strokeWeight(procentMigrantov);
+    line(902+450, 435+50 - 10 + i*50, 902+500, 435+50 - 10 + i*50);
+  }
+  stroke(0,0,0,255);
 }
 
 
@@ -153,53 +214,70 @@ void setup() {
 }
 
 
+Integer findSelectedRegion() {
+  Integer selectedRegion = null;
+  for (int i = 0; i < 12; i++) {
+    if (areaChecker.get(mouseX, mouseY) == barveRegij[i]) {
+      selectedRegion = i;
+      break;
+    }
+  }
+  return selectedRegion;
+}
+
 void draw() {
   background(255);
   colorMode(HSB, 360, 100, 100);
-  Integer selectedRegion = null;
+  Integer selectedRegion = findSelectedRegion();
+  textSize(30);
+  text(NASLOV, 40, 40);
   for (int i = 0; i < 12; i++) {
     PShape regija = regionShapes[i];
     regija.disableStyle();
 
     float howMuchColor = map(regions[i].povprecnaPlaca, minPovprecnaPlaca, maxPovprecnaPlaca, 20, 100);
 
-    if (areaChecker.get(mouseX, mouseY) == barveRegij[i]) {
-      selectedRegion = i;
-      fill(218, howMuchColor-20, 100);
-    } else {
-      fill(218, howMuchColor, 100);
-    }
-    shape(regija, 0, 0, shapeWidth*3.5, shapeHeight*3.5);
+
+    //if (areaChecker.get(mouseX, mouseY) == barveRegij[i]) {
+    //  selectedRegion = i;
+    //  if(currentlyDrawing != selectedRegion){
+    //    interpolator = 0;
+    //    currentlyDrawing = selectedRegion;
+    //  }else{
+    //    interpolator = min(interpolator+0.1, 1);
+    //  }
+    //  fill(218, howMuchColor-20, 100);
+    //} else {
+    fill(218, howMuchColor, 100);
+    //}
+    shape(regija, 0, 0, shapeWidth, shapeHeight);
+
+    fill(218, 0, 100);
   }
+  drawDelezMigrantov();
   if (selectedRegion != null) {
     displayInfoAboutSelectedRegion(selectedRegion);
     drawArrowsForSelectedRegion(selectedRegion);
-    ellipse(lokacijeRegij[selectedRegion][0], lokacijeRegij[selectedRegion][1], 30, 30);
+    drawDelezMigrantovForRegion(selectedRegion);
+  } else {
+    interpolator = 0;
+    currentlyDrawing = -1;
   }
+}
 
+void drawDelezMigrantov() {
+  for (int i = 0; i < 12; i++) {
+    drawDelezMigrantovForRegion(i);
+  }
+}
 
-
-
-
-  //if (selectedRegion != null) {
-  //  fill(255, 255, 255);
-  //  rect(mouseX, mouseY-150, 300, 150);
-  //  textSize(30);
-
-  //  fill(0, 0, 612);
-
-  //  String imeRegije = regije[selectedRegion];
-  //  imeRegije = imeRegije.substring(0, 1).toUpperCase() + imeRegije.substring(1);
-  //  text(imeRegije, mouseX+5, mouseY-150+30);
-  //}
+void drawDelezMigrantovForRegion(int i) {
+  fill(0, 0, 100);
+  float delezMigrantov = (float) regions[i].delavciIzvenRegije/regions[i].delavciSkupaj;
+  ellipse(lokacijeRegij[i][0], lokacijeRegij[i][1], 60*delezMigrantov, 60*delezMigrantov);
 }
 
 void mousePressed() {
-  print(mouseX + "," + mouseY+ "\n");
-}
-
-
-class Tuple {
-  private String imeRegije;
-  private float procentIzhodov;
+  // int i = findSelectedRegion();
+  // print((float) regions[i].delavciIzvenRegije/regions[i].delavciSkupaj + "\n");
 }
