@@ -1,8 +1,13 @@
 PShape sloveniaShape; //<>// //<>// //<>// //<>//
-float shapeWidth = 4000;
-float shapeHeight = shapeWidth*210/297;
 
-String NASLOV = "Vpliv višine povprečne plače na dnevne migracije (po regijah 2020)";
+float shapeRatio = (float) 210/297;
+float shapeWidth = 4000;
+float shapeHeight = shapeWidth*shapeRatio;
+
+float widthRatio = 1;
+float heightRatio = 1;
+
+String NASLOV = "Vpliv višine povprečne plače na dnevne migracije, po regijah, 2020";
 
 int povprecnaPlaca = 1252;
 int maxPovprecnaPlaca = 0;
@@ -59,6 +64,70 @@ class Regija {
   }
 }
 
+
+void setup() {
+  size(1500, 800);
+  colorMode(HSB, 360, 100, 100);
+
+  sloveniaShape = loadShape("slo_regije.svg");
+  areaChecker = createGraphics(1500, 800);
+
+  loadOffscreenDrawnRegions();
+  loadPodatki();
+}
+
+
+Integer findSelectedRegion() {
+  Integer selectedRegion = null;
+  for (int i = 0; i < 12; i++) {
+    if (areaChecker.get(mouseX, mouseY) == barveRegij[i]) {
+      selectedRegion = i;
+      break;
+    }
+  }
+  return selectedRegion;
+}
+
+void draw() {
+  background(255);
+  Integer selectedRegion = findSelectedRegion();
+
+  drawNaslov();
+
+  drawRegije();
+  drawDeleziMigrantov();
+
+  if (selectedRegion != null) {
+    displayInfoAboutSelectedRegion(selectedRegion);
+    drawLinesForRegion(selectedRegion);
+    drawDelezMigrantovForRegion(selectedRegion); // To keep it on top
+  } else {
+    interpolator = 0;
+    currentlyDrawing = -1;
+  }
+
+  drawLegend();
+}
+
+void drawNaslov() {
+  fill(0, 0, 100);
+  textSize(30);
+  textAlign(LEFT);
+  text(NASLOV, 40, 40);
+}
+
+void drawRegije() {
+  stroke(0, 0, 0);
+  for (int i = 0; i < 12; i++) {
+    PShape regija = regionShapes[i];
+    regija.disableStyle();
+
+    float howMuchColor = map(regions[i].povprecnaPlaca, minPovprecnaPlaca, maxPovprecnaPlaca, 20, 100);
+
+    fill(218, howMuchColor, 100);
+    shape(regija, 0, 0, shapeWidth, shapeHeight);
+  }
+}
 
 void loadOffscreenDrawnRegions() {
   areaChecker.beginDraw();
@@ -153,11 +222,11 @@ void displayInfoAboutSelectedRegion(int selectedRegion) {
   stroke(0, 0, 0, 255*sqrt(interpolator));
   fill(0, 0, 100, 255*sqrt(interpolator));
   rect(880, 420, 570, 350);
-  
+
   textSize(50);
   String imeRegije = regije[selectedRegion];
   imeRegije = imeRegije.substring(0, 1).toUpperCase() + imeRegije.substring(1);
-  
+
   fill(0, 0, 0, 255*sqrt(interpolator));
 
   textAlign(CENTER);
@@ -197,136 +266,97 @@ void displayInfoAboutSelectedRegion(int selectedRegion) {
 }
 
 
-void setup() {
-  size(1500, 800);
-  colorMode(HSB, 360, 100, 100);
-
-  sloveniaShape = loadShape("slo_regije.svg");
-  areaChecker = createGraphics(1500, 800);
-
-  loadOffscreenDrawnRegions();
-  loadPodatki();
-}
-
-
-Integer findSelectedRegion() {
-  Integer selectedRegion = null;
-  for (int i = 0; i < 12; i++) {
-    if (areaChecker.get(mouseX, mouseY) == barveRegij[i]) {
-      selectedRegion = i;
-      break;
-    }
-  }
-  return selectedRegion;
-}
-
-void draw() {
-  background(255);
-  Integer selectedRegion = findSelectedRegion();
-
-  drawNaslov();
-
-  drawRegije();
-  drawDeleziMigrantov();
-
-  if (selectedRegion != null) {
-    displayInfoAboutSelectedRegion(selectedRegion);
-    drawLinesForRegion(selectedRegion);
-    drawDelezMigrantovForRegion(selectedRegion); // To keep it on top
-  } else {
-    interpolator = 0;
-    currentlyDrawing = -1;
-  }
-
-  drawLegend();
-}
-
-void drawNaslov() {
-  fill(0, 0, 100);
-  textSize(30);
-  textAlign(LEFT);
-  text(NASLOV, 40, 40);
-}
-
-void drawRegije() {
-  stroke(0, 0, 0);
-  for (int i = 0; i < 12; i++) {
-    PShape regija = regionShapes[i];
-    regija.disableStyle();
-
-    float howMuchColor = map(regions[i].povprecnaPlaca, minPovprecnaPlaca, maxPovprecnaPlaca, 20, 100);
-
-    fill(218, howMuchColor, 100);
-    shape(regija, 0, 0, shapeWidth, shapeHeight);
+void drawLegendGradient(int xStart, int yStart) {
+  yStart = yStart - 20;
+  var gradientWidth = 40;
+  for (int i = 20; i<=100; i++) {
+    stroke(218, i, 100);
+    line(xStart, yStart+i, xStart+gradientWidth, yStart+i);
   }
 }
 
 
 void drawLegend() {
-  rect(1220, 50, 200, 150);
+  var xLegendStart = 1220;
+  var yLegendStart = 50;
+  var legendWidth = 200;
+  var legendHeight = 150;
+  var xLegendCenter = xLegendStart + legendWidth/2;
 
-  textSize(25);
+  var naslovSize = 25;
+  var ostaliTextSize = 20;
+  var naslovTopPadding = 30;
+
+  rect(xLegendStart, yLegendStart, legendWidth, legendHeight);
+
+  textSize(naslovSize);
   fill(0, 0, 0);
   textAlign(CENTER);
-  text("Povprečna plača", 1320, 80);
 
-  for (int i = 20; i<=100; i++) {
-    stroke(218, i, 100);
-    line(1220+10+10, 65+10+5+i, 1220+10+10+40, 65+10+5+i);
-  }
+  text("Povprečna plača", xLegendCenter, yLegendStart+naslovTopPadding);
 
-  textSize(20);
+  var gradientLeftPadding = 30;
+  drawLegendGradient(xLegendStart+gradientLeftPadding, yLegendStart+naslovSize+naslovTopPadding-5); // zakaj -5? nimam pojma, drugace ne stoji prav -.-
+
+
+  var relativeXLineStart = 55;
+  var lineLength = 60;
+
   stroke(218, 20, 100);
-  line(1220+10+40, 65+10+5+20, 1220+10+100, 65+10+5+20);
-  
-  
-  stroke(0,0,0,100);
-  textAlign(CENTER,CENTER);
-  text(minPovprecnaPlaca+ "€", 1215+150, 65+15+20);
+  textSize(ostaliTextSize);
+  line(xLegendStart+relativeXLineStart, 100, xLegendStart+relativeXLineStart+lineLength, 65+10+5+20);
 
-  line(1220+10+40, 65+10+80+5+20, 1220+10+100, 65+10+80+5+20);
-  
-  
   stroke(218, 100, 100);
-  textAlign(CENTER,CENTER);
-  text(maxPovprecnaPlaca+ "€", 1215+150, 65+10+80+20);
+  textAlign(CENTER, CENTER);
+  var xTextCenter = xLegendStart+145;
+  text(minPovprecnaPlaca+ "€", xTextCenter, 100);
+
+  line(xLegendStart+relativeXLineStart, 180, xLegendStart+relativeXLineStart+lineLength, 180);
+
+  textAlign(CENTER, CENTER);
+  text(maxPovprecnaPlaca+ "€", xTextCenter, 175);
+
+
+
 
   fill(0, 0, 100);
   stroke(0, 0, 0);
-  rect(1220, 210, 200, 150);
+  rect(xLegendStart, 210, legendWidth, legendHeight);
 
   textSize(25);
   fill(0, 0, 0);
   textAlign(CENTER);
   text("Dnevni migrantje", 1320, 80+160);
 
-  fill(0, 0, 100);
-  ellipse(1253, 260, 60*0.08, 60*0.08);
 
   fill(0, 0, 0);
   textAlign(CENTER, CENTER);
-  stroke(0,0,0,100);
-  line(1253, 260, 1320, 260);
-  
-  textSize(20);
-  text((float) round(1000*minProcentMigrantov)/10 + "%", 1253+100, 258);
+  textSize(ostaliTextSize);
+  text((float) round(1000*minProcentMigrantov)/10 + "%", xTextCenter, 258);
 
-  fill(0, 0, 100, 80);
 
+  var circlesXCenter = 1270;
   stroke(0, 0, 0, 100);
-  ellipse(1253, 260+8, 60* 0.15, 60*0.15);
-  ellipse(1253, 260+22, 60* 0.3, 60*0.3);
-  ellipse(1253, 260+43, 60* 0.40, 60*0.40);
-
+  line(circlesXCenter, 260, circlesXCenter+lineLength, 260);
 
   stroke(0, 0, 0);
-  ellipse(1253, 330, 60*0.5, 60*0.5);
-  
-  stroke(0,0,0,100);
-  line(1253, 330, 1320, 330);
+  fill(0, 0, 100);
+  ellipse(circlesXCenter, 260, 60*0.08, 60*0.08);
+
+  stroke(0, 0, 0, 100);
+  ellipse(circlesXCenter, 260+8, 60* 0.15, 60*0.15);
+  ellipse(circlesXCenter, 260+22, 60* 0.3, 60*0.3);
+  ellipse(circlesXCenter, 260+43, 60* 0.40, 60*0.40);
+
+  stroke(0, 0, 0);
+  ellipse(circlesXCenter, 330, 60*0.5, 60*0.5);
+
+  stroke(0, 0, 0, 100);
+  line(circlesXCenter, 330, circlesXCenter+lineLength, 330);
+
   fill(0, 0, 0);
-  textSize(20);
-  text((float) round(1000*maxProcentMigrantov)/10 + "%", 1253+100, 328);
+  textSize(ostaliTextSize);
+  text((float) round(1000*maxProcentMigrantov)/10 + "%", xTextCenter, 328);
 }
 
 void drawDeleziMigrantov() {
@@ -339,10 +369,4 @@ void drawDelezMigrantovForRegion(int i) {
   fill(0, 0, 100);
   float delezMigrantov = (float) regions[i].delavciIzvenRegije/regions[i].delavciSkupaj;
   ellipse(lokacijeRegij[i][0], lokacijeRegij[i][1], 60*delezMigrantov, 60*delezMigrantov);
-}
-
-void mousePressed() {
-  // int i = findSelectedRegion();
-  // print((float) regions[i].delavciIzvenRegije/regions[i].delavciSkupaj + "\n");
-  print(mouseX + ","+ mouseY+"\n");
 }
